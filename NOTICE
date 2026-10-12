@@ -1,0 +1,19 @@
+Fury Audio Studio — attribution notice
+==========================================
+
+Origin: Dusky Audio Studio by dusklinux
+        https://github.com/dusklinux/dusky
+        (user_scripts/audio/dusky_audio_studio/)
+Base commit snapshotted here: 522cb09c4a1a578c3e1fd98b377bd8ad44371fdb (2026-10-10)
+
+The upstream repository advertises MIT terms (see LICENSE, kept verbatim).
+Note a known discrepancy: upstream audio-helper/main.c carries a
+"License: GPL-3.0 (same as parent project)" header. Until upstream
+clarifies, the native engine in audio-helper/ is treated as GPL-3.0-covered;
+the combined work is distributed under GPL-3.0-compatible terms.
+
+Other attributions that travel with ported concepts:
+- RNNoise (Jean-Marc Valin / Mozilla) — system library, not vendored.
+- PipeWire / SPA (PipeWire contributors) — system library, not vendored.
+- RBJ Audio EQ Cookbook biquad designs (Robert Bristow-Johnson).
+- Freeverb-style Schroeder reverb topology (4 combs + 2 allpasses).

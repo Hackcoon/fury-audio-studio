@@ -1,4 +1,4 @@
-/* Dusky Audio Studio: shared IPC protocol header.
+/* Fury Audio Studio: shared IPC protocol header.
  *
  * Binary audio-frame layout written on stdout (little-endian),
  * line-based commands read on stdin.
@@ -14,33 +14,33 @@
  *     Reads -80 dBFS when RNNoise is bypassed.
  *   - VOP command takes 7 args including pitch-follow + transpose.
  */
-#ifndef GHELPER_AUDIO_PROTOCOL_H
-#define GHELPER_AUDIO_PROTOCOL_H
+#ifndef FURY_AUDIO_PROTOCOL_H
+#define FURY_AUDIO_PROTOCOL_H
 
 #include <stdint.h>
 
-#define GHA_MAGIC 0x47484146u /* "GHAF" */
-#define GHA_PROTOCOL_VERSION 4u
+#define FURY_MAGIC 0x47484146u /* "GHAF" */
+#define FURY_PROTOCOL_VERSION 4u
 
-#define GHA_EQ_BANDS 9
+#define FURY_EQ_BANDS 9
 
-#define GHA_FLAG_RNNOISE_ON     (1u << 0)
-#define GHA_FLAG_EQ_ON          (1u << 1)
-#define GHA_FLAG_DELAY_ON       (1u << 2)
-#define GHA_FLAG_REVERB_ON      (1u << 3)
-#define GHA_FLAG_MONITOR_ON     (1u << 4)
-#define GHA_FLAG_VOCODER_ON     (1u << 5)
-#define GHA_FLAG_OUT_RNNOISE_ON (1u << 6)
-#define GHA_FLAG_OUT_EQ_ON      (1u << 7)
+#define FURY_FLAG_RNNOISE_ON     (1u << 0)
+#define FURY_FLAG_EQ_ON          (1u << 1)
+#define FURY_FLAG_DELAY_ON       (1u << 2)
+#define FURY_FLAG_REVERB_ON      (1u << 3)
+#define FURY_FLAG_MONITOR_ON     (1u << 4)
+#define FURY_FLAG_VOCODER_ON     (1u << 5)
+#define FURY_FLAG_OUT_RNNOISE_ON (1u << 6)
+#define FURY_FLAG_OUT_EQ_ON      (1u << 7)
 
 #pragma pack(push, 4)
 
-struct gha_frame
+struct fury_frame
 {
-    uint32_t magic;   /* GHA_MAGIC */
-    uint32_t version; /* GHA_PROTOCOL_VERSION */
+    uint32_t magic;   /* FURY_MAGIC */
+    uint32_t version; /* FURY_PROTOCOL_VERSION */
     uint32_t seq;     /* monotonically increasing */
-    uint32_t flags;   /* GHA_FLAG_* */
+    uint32_t flags;   /* FURY_FLAG_* */
 
     float vad_prob;           /* 0..1 voice activity probability from RNNoise */
     float rms_in_db;          /* raw input RMS dBFS, floor -80 */

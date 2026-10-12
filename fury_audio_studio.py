@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Dusky Audio Studio & Voice DSP — Bleeding-Edge Audio Engine & GTK3 Control Studio
-Target Specification: Parstix Linux (Kernel 7.3+, Python 3.14.7+)
+Fury Audio Studio & Voice DSP — Bleeding-Edge Audio Engine & GTK3 Control Studio
+Target Specification: Linux (Kernel 7.3+, Python 3.14.7+)
 Pure bleeding-edge Linux audio architecture with zero legacy shims.
 
 Features:
@@ -41,12 +41,12 @@ import time
 import weakref
 
 # --- Constants & Paths ---
-APP_ID: Final[str] = "org.dusky.audio-studio"
+APP_ID: Final[str] = "org.fury.audio-studio"
 HOME_DIR: Final[Path] = Path.home()
-STATE_DIR: Final[Path] = HOME_DIR / ".config" / "dusky" / "settings" / "dusky_studio"
-CACHE_DIR: Final[Path] = HOME_DIR / ".cache" / "dusky_studio"
+STATE_DIR: Final[Path] = HOME_DIR / ".config" / "fury" / "studio"
+CACHE_DIR: Final[Path] = HOME_DIR / ".cache" / "fury-studio"
 CONFIG_FILE: Final[Path] = STATE_DIR / "config.json"
-SOCK_PATH: Final[Path] = STATE_DIR / "dusky_audio.sock"
+SOCK_PATH: Final[Path] = STATE_DIR / "fury_audio.sock"
 PID_FILE: Final[Path] = STATE_DIR / "daemon.pid"
 GUI_PID_FILE: Final[Path] = STATE_DIR / "gui.pid"
 
@@ -55,10 +55,10 @@ FRAME_SIZE: Final[int] = 36
 MAGIC: Final[int] = 0x47484146  # "GHAF"
 PROTOCOL_VERSION: Final[int] = 4
 HEADER_STRUCT: Final[struct.Struct] = struct.Struct("<IIIIfffff")  # 36 bytes
-NO_HARDWARE_TARGET: Final[str] = "dusky-no-hardware-device"
+NO_HARDWARE_TARGET: Final[str] = "fury-no-hardware-device"
 APP_NODE_NAMES: Final[frozenset[str]] = frozenset({
-    "ghelper-audio", "ghelper-audio-sink", "ghelper-audio-capture",
-    "ghelper-audio-sink-out", "ghelper-audio-monitor",
+    "fury-audio", "fury-audio-sink", "fury-audio-capture",
+    "fury-audio-sink-out", "fury-audio-monitor",
 })
 EQ_BANDS: Final[tuple[tuple[str, int, int, int], ...]] = (
     ("80 Hz (Sub Bass)", 0, 80, 707),
@@ -78,7 +78,7 @@ COMMAND_ENV["LC_ALL"] = "C.UTF-8"
 COMMAND_ENV["LANG"] = "C.UTF-8"
 
 # Dynamic Material You / Matugen GTK3 CSS Theme
-DUSKY_CSS: Final[str] = """
+FURY_CSS: Final[str] = """
 window.panel-window {
     background-color: @theme_bg_color;
     border: 1px solid rgba(255, 255, 255, 0.08);
@@ -858,6 +858,14 @@ def apply_voice_preset(cfg: AudioConfig, name: str, target: str) -> None:
 
 
 def find_helper_binary() -> Path | None:
+    _env = os.environ.get("FURY_AUDIO_DSP_BIN", "")
+    if _env:
+        _p = Path(_env)
+        try:
+            if _p.is_file() and os.access(_p, os.X_OK) and helper_protocol_matches(_p):
+                return _p
+        except Exception:
+            pass
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     with open(STATE_DIR / "helper-build.lock", "a+b") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
@@ -867,7 +875,7 @@ def find_helper_binary() -> Path | None:
 def _find_helper_binary_unlocked() -> Path | None:
     script_dir = Path(__file__).resolve().parent
     helper_dir = script_dir / "audio-helper"
-    local_bin = helper_dir / "dusky_audio_dsp"
+    local_bin = helper_dir / "fury_audio_dsp"
     sources = [helper_dir / name for name in ("main.c", "protocol.h", "Makefile")]
     if (local_bin.is_file() and os.access(local_bin, os.X_OK)
             and all(src.is_file() for src in sources)
@@ -883,9 +891,9 @@ def _find_helper_binary_unlocked() -> Path | None:
                 return local_bin
         except subprocess.CalledProcessError as exc:
             detail = (exc.stderr or exc.stdout or str(exc)).strip()
-            print(f"[DuskyAudio] Helper build failed:\n{detail}", file=sys.stderr)
+            print(f"[FuryAudio] Helper build failed:\n{detail}", file=sys.stderr)
         except (OSError, subprocess.SubprocessError) as exc:
-            print(f"[DuskyAudio] Helper build failed: {exc}", file=sys.stderr)
+            print(f"[FuryAudio] Helper build failed: {exc}", file=sys.stderr)
     return None
 
 
@@ -907,7 +915,7 @@ def send_desktop_notification(
             [
                 "notify-send",
                 "-a",
-                "Dusky Audio Studio",
+                "Fury Audio Studio",
                 "-u",
                 urgency,
                 "-i",
@@ -945,12 +953,12 @@ def check_system_dependencies() -> list[str]:
 
         unique_pkgs = list(dict.fromkeys(missing_pkgs))
         if unique_pkgs:
-            missing.append(f"Install required packages: sudo pacman -S {' '.join(unique_pkgs)}")
+            missing.append(f"Install required packages: system packages (install pipewire wireplumber rnnoise libnotify) {' '.join(unique_pkgs)}")
         else:
             missing.append(f"Native Audio DSP engine failed to compile ({Path(__file__).resolve().parent / 'audio-helper'})")
     elif missing_pkgs:
         unique_pkgs = list(dict.fromkeys(missing_pkgs))
-        missing.append(f"Install required packages: sudo pacman -S {' '.join(unique_pkgs)}")
+        missing.append(f"Install required packages: system packages (install pipewire wireplumber rnnoise libnotify) {' '.join(unique_pkgs)}")
 
     return missing
 
@@ -966,7 +974,7 @@ def load_config() -> AudioConfig:
             remember_config_baseline(cfg)
             return cfg
         except (OSError, ValueError, TypeError, AttributeError) as e:
-            print(f"[DuskyAudio] Invalid configuration: {e}", file=sys.stderr)
+            print(f"[FuryAudio] Invalid configuration: {e}", file=sys.stderr)
 
     cfg = AudioConfig()
     remember_config_baseline(cfg)
@@ -1008,10 +1016,10 @@ def save_config(cfg: AudioConfig) -> None:
             finally:
                 tmp.unlink(missing_ok=True)
     except OSError as e:
-        print(f"[DuskyAudio] Failed to save configuration: {e}", file=sys.stderr)
+        print(f"[FuryAudio] Failed to save configuration: {e}", file=sys.stderr)
 
 
-def pid_is_dusky_audio(pid: int) -> bool:
+def pid_is_fury_audio(pid: int) -> bool:
     """True only if /proc/<pid>/cmdline belongs to this application.
 
     PID files can outlive their process; once the kernel recycles the PID it
@@ -1022,7 +1030,7 @@ def pid_is_dusky_audio(pid: int) -> bool:
         raw = Path(f"/proc/{pid}/cmdline").read_bytes()
     except OSError:
         return False
-    return b"dusky_audio_studio" in raw
+    return b"fury_audio_studio" in raw
 
 
 def get_daemon_pid() -> int | None:
@@ -1031,7 +1039,7 @@ def get_daemon_pid() -> int | None:
             with open(PID_FILE, "r", encoding="utf-8") as f:
                 pid = int(f.read().strip())
             os.kill(pid, 0)
-            if not pid_is_dusky_audio(pid):
+            if not pid_is_fury_audio(pid):
                 raise ValueError("pid recycled by another process")
             return pid
         except (OSError, ValueError):
@@ -1163,7 +1171,7 @@ def restore_previous_default_devices(cfg: AudioConfig | None = None,
             result = subprocess.run(["wpctl", "set-default", str(selected)],
                                     capture_output=True, text=True, env=COMMAND_ENV)
             if result.returncode:
-                print(f"[DuskyAudio] Could not restore {direction}: {result.stderr.strip()}",
+                print(f"[FuryAudio] Could not restore {direction}: {result.stderr.strip()}",
                       file=sys.stderr)
                 continue
             if configured and shutil.which("pw-metadata"):
@@ -1173,16 +1181,16 @@ def restore_previous_default_devices(cfg: AudioConfig | None = None,
                      json.dumps({"name": configured}), "Spa:String:JSON"],
                     capture_output=True, text=True, env=COMMAND_ENV)
                 if result.returncode:
-                    print(f"[DuskyAudio] Could not restore configured {direction}: {result.stderr.strip()}",
+                    print(f"[FuryAudio] Could not restore configured {direction}: {result.stderr.strip()}",
                           file=sys.stderr)
             elif not configured:
                 subprocess.run(["wpctl", "clear-default", str(selected)],
                                capture_output=True, text=True, env=COMMAND_ENV)
 
 
-def set_dusky_devices_as_default() -> bool:
+def set_fury_devices_as_default() -> bool:
     """
-    Automatically sets Dusky Mic (Source) and Dusky Audio (Sink) as the system's
+    Automatically sets Fury Mic (Source) and Fury Audio (Sink) as the system's
     active default audio devices in PipeWire / WirePlumber upon engine startup.
     Allows manual override at any time via pavucontrol, wpctl, or desktop applets.
     """
@@ -1204,10 +1212,10 @@ def set_dusky_devices_as_default() -> bool:
                 ["pw-dump"], text=True, stderr=subprocess.DEVNULL,
                 env=COMMAND_ENV, timeout=2))
             expected_classes = {
-                "ghelper-audio": "Audio/Source",
-                "ghelper-audio-sink": "Audio/Sink",
-                "ghelper-audio-capture": "Stream/Input/Audio",
-                "ghelper-audio-sink-out": "Stream/Output/Audio",
+                "fury-audio": "Audio/Source",
+                "fury-audio-sink": "Audio/Sink",
+                "fury-audio-capture": "Stream/Input/Audio",
+                "fury-audio-sink-out": "Stream/Output/Audio",
             }
             node_ids = {
                 props.get("node.name"): obj.get("id")
@@ -1222,10 +1230,10 @@ def set_dusky_devices_as_default() -> bool:
                  obj.get("info", {}).get("props", {}).get("link.input.node"))
                 for obj in graph if obj.get("type", "").endswith(":Link")
             }
-            mic_id = node_ids.get("ghelper-audio")
-            virtual_sink_id = node_ids.get("ghelper-audio-sink")
-            capture_id = node_ids.get("ghelper-audio-capture")
-            playback_id = node_ids.get("ghelper-audio-sink-out")
+            mic_id = node_ids.get("fury-audio")
+            virtual_sink_id = node_ids.get("fury-audio-sink")
+            capture_id = node_ids.get("fury-audio-capture")
+            playback_id = node_ids.get("fury-audio-sink-out")
             if None in (mic_id, virtual_sink_id, capture_id, playback_id):
                 time.sleep(0.05)
                 continue
@@ -1251,7 +1259,7 @@ def set_dusky_devices_as_default() -> bool:
         except (OSError, subprocess.SubprocessError, ValueError) as e:
             last_error = str(e)
         time.sleep(0.05)
-    print(f"[DuskyAudio] Could not establish audio routing: {last_error}", file=sys.stderr)
+    print(f"[FuryAudio] Could not establish audio routing: {last_error}", file=sys.stderr)
     return False
 
 
@@ -1280,7 +1288,7 @@ class AudioDspServer:
                 with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
                     client.settimeout(0.2)
                     client.connect(str(SOCK_PATH))
-                    print("[DuskyAudioServer] Another server is running", file=sys.stderr)
+                    print("[FuryAudioServer] Another server is running", file=sys.stderr)
                     return False
             except OSError:
                 SOCK_PATH.unlink(missing_ok=True)
@@ -1292,7 +1300,7 @@ class AudioDspServer:
                     stdout=subprocess.PIPE, stderr=log, bufsize=0,
                 )
         except Exception as e:
-            print(f"[DuskyAudioServer] Failed to launch {self.bin_path}: {e}", file=sys.stderr)
+            print(f"[FuryAudioServer] Failed to launch {self.bin_path}: {e}", file=sys.stderr)
             return False
 
         self.running = True
@@ -1304,7 +1312,7 @@ class AudioDspServer:
             self.sock.bind(str(SOCK_PATH))
             self._owns_socket = True
         except OSError as e:
-            print(f"[DuskyAudioServer] Socket startup failed: {e}", file=sys.stderr)
+            print(f"[FuryAudioServer] Socket startup failed: {e}", file=sys.stderr)
             self.stop()
             return False
         # Owner-only: the socket accepts arbitrary DSP commands and must not
@@ -1321,7 +1329,7 @@ class AudioDspServer:
             init_cfg = load_config()
             self._apply_full_config(init_cfg)
         except Exception as e:
-            print(f"[DuskyAudioServer] Configuration failed: {e}", file=sys.stderr)
+            print(f"[FuryAudioServer] Configuration failed: {e}", file=sys.stderr)
             self.stop()
             return False
 
@@ -1456,8 +1464,8 @@ class AudioDspServer:
                 defaults = snapshot[1]
                 directions = {
                     direction for direction, virtual_name in (
-                        ("source", "ghelper-audio"),
-                        ("sink", "ghelper-audio-sink"),
+                        ("source", "fury-audio"),
+                        ("sink", "fury-audio-sink"),
                     ) if any(defaults.get(f"default.{prefix}audio.{direction}") == virtual_name
                              for prefix in ("", "configured."))
                 }
@@ -1510,7 +1518,7 @@ class AudioDspServer:
                             except (ValueError, TypeError, RuntimeError) as e:
                                 conn.sendall(f"ERROR {e}\n".encode())
         except OSError as e:
-            print(f"[DuskyAudioServer] Client connection failed: {e}", file=sys.stderr)
+            print(f"[FuryAudioServer] Client connection failed: {e}", file=sys.stderr)
 
     def _apply_full_config(self, cfg: AudioConfig) -> None:
         validate_config(cfg)
@@ -1692,7 +1700,7 @@ def _start_daemon_locked(cfg: AudioConfig) -> bool:
 
     pid = existing_pid
     if pid and SOCK_PATH.exists():
-        if sync_config_to_daemon(cfg) and set_dusky_devices_as_default():
+        if sync_config_to_daemon(cfg) and set_fury_devices_as_default():
             return True
 
     if pid:
@@ -1703,9 +1711,9 @@ def _start_daemon_locked(cfg: AudioConfig) -> bool:
 
     missing = check_system_dependencies()
     if missing:
-        err_msg = "Dusky Audio Studio cannot start due to missing dependencies:\n\n" + "\n".join(f"• {m}" for m in missing)
-        print(f"\n[Dusky Audio Error]\n{err_msg}\n", file=sys.stderr)
-        send_desktop_notification("Dusky Audio Studio — Missing Dependency", "\n".join(f"• {m}" for m in missing), "critical")
+        err_msg = "Fury Audio Studio cannot start due to missing dependencies:\n\n" + "\n".join(f"• {m}" for m in missing)
+        print(f"\n[Fury Audio Error]\n{err_msg}\n", file=sys.stderr)
+        send_desktop_notification("Fury Audio Studio — Missing Dependency", "\n".join(f"• {m}" for m in missing), "critical")
         return False
 
     bin_path = find_helper_binary()
@@ -1717,7 +1725,7 @@ def _start_daemon_locked(cfg: AudioConfig) -> bool:
     server_code = f"""
 import sys
 sys.path.insert(0, {repr(str(script_dir))})
-from dusky_audio_studio import AudioDspServer, Path
+from fury_audio_studio import AudioDspServer, Path
 srv = AudioDspServer(Path({repr(str(bin_path))}))
 if srv.start():
     srv.serve_forever()
@@ -1731,7 +1739,7 @@ if srv.start():
                 start_new_session=True, env=COMMAND_ENV,
             )
     except OSError as exc:
-        print(f"[DuskyAudio] Server launch failed: {exc}", file=sys.stderr)
+        print(f"[FuryAudio] Server launch failed: {exc}", file=sys.stderr)
         return False
 
     server_ready = False
@@ -1751,10 +1759,10 @@ if srv.start():
             except Exception:
                 pass
 
-    if server_ready and sync_config_to_daemon(cfg) and set_dusky_devices_as_default():
+    if server_ready and sync_config_to_daemon(cfg) and set_fury_devices_as_default():
         return True
 
-    print(f"[DuskyAudio] Server startup failed; see {CACHE_DIR / 'server.log'}", file=sys.stderr)
+    print(f"[FuryAudio] Server startup failed; see {CACHE_DIR / 'server.log'}", file=sys.stderr)
     if child.poll() is None:
         child.terminate()
         try:
@@ -1779,8 +1787,8 @@ def _stop_daemon_unlocked(restore_defaults: bool = True, cfg: AudioConfig | None
         snapshot = pipewire_audio_snapshot()
         if snapshot is not None:
             defaults = snapshot[1]
-            for direction, virtual_name in (("source", "ghelper-audio"),
-                                             ("sink", "ghelper-audio-sink")):
+            for direction, virtual_name in (("source", "fury-audio"),
+                                             ("sink", "fury-audio-sink")):
                 if any(defaults.get(f"default.{prefix}audio.{direction}") == virtual_name
                        for prefix in ("", "configured.")):
                     directions.add(direction)
@@ -1798,7 +1806,7 @@ def _stop_daemon_unlocked(restore_defaults: bool = True, cfg: AudioConfig | None
     if pid:
         for _ in range(30):
             time.sleep(0.05)
-            if not pid_is_dusky_audio(pid):
+            if not pid_is_fury_audio(pid):
                 break
         else:
             try:
@@ -1807,7 +1815,7 @@ def _stop_daemon_unlocked(restore_defaults: bool = True, cfg: AudioConfig | None
                 pass
             for _ in range(20):
                 time.sleep(0.05)
-                if not pid_is_dusky_audio(pid):
+                if not pid_is_fury_audio(pid):
                     break
             else:
                 try:
@@ -1828,13 +1836,13 @@ def _stop_daemon_unlocked(restore_defaults: bool = True, cfg: AudioConfig | None
 #   GTK3 Interface & Reactive Studio Studio
 # -----------------------------------------------------------------------------
 def run_gtk_app(*, open_only: bool = False) -> None:
-    os.environ["GDK_BACKEND"] = "wayland"
+    os.environ.setdefault("GDK_BACKEND", "wayland") if os.environ.get("WAYLAND_DISPLAY") else os.environ.pop("GDK_BACKEND", None)
     if GUI_PID_FILE.exists():
         try:
             with open(GUI_PID_FILE, "r", encoding="utf-8") as f:
                 old_pid = int(f.read().strip())
             os.kill(old_pid, 0)
-            if not pid_is_dusky_audio(old_pid):
+            if not pid_is_fury_audio(old_pid):
                 raise ValueError("pid recycled by another process")
             os.kill(old_pid, signal.SIGTERM)
             GUI_PID_FILE.unlink(missing_ok=True)
@@ -1851,8 +1859,8 @@ def run_gtk_app(*, open_only: bool = False) -> None:
     from gi.repository import Gdk, GLib, Gtk
 
     try:
-        GLib.set_prgname("dusky_audio_studio.py")
-        GLib.set_application_name("Dusky Audio Studio")
+        GLib.set_prgname("fury_audio_studio.py")
+        GLib.set_application_name("Fury Audio Studio")
     except Exception:
         pass
 
@@ -1862,14 +1870,14 @@ def run_gtk_app(*, open_only: bool = False) -> None:
         cfg.enabled = bool(get_daemon_pid())
 
     provider = Gtk.CssProvider()
-    provider.load_from_data(DUSKY_CSS.encode("utf-8"))
+    provider.load_from_data(FURY_CSS.encode("utf-8"))
     screen = Gdk.Screen.get_default()
     if screen:
         Gtk.StyleContext.add_provider_for_screen(screen, provider, Gtk.STYLE_PROVIDER_PRIORITY_USER)
 
     class AudioStudioWindow(Gtk.Window):
         def __init__(self) -> None:
-            super().__init__(title="Dusky Audio Studio & Voice DSP")
+            super().__init__(title="Fury Audio Studio & Voice DSP")
             self.set_default_size(630, 640)
             self.set_border_width(16)
             self.set_position(Gtk.WindowPosition.CENTER)
@@ -1878,7 +1886,7 @@ def run_gtk_app(*, open_only: bool = False) -> None:
             self.cfg = cfg
             self._last_status_check = 0.0
             self._save_timer = 0
-            self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="dusky-ui-control")
+            self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="fury-ui-control")
             self._command_lock = threading.Lock()
             self._command_epoch = 0
             self._command_serial: dict[str, int] = {}
@@ -1909,7 +1917,7 @@ def run_gtk_app(*, open_only: bool = False) -> None:
             title_box.set_halign(Gtk.Align.CENTER)
             title_box.set_hexpand(True)
 
-            title_lbl = Gtk.Label(label="Dusky Audio Studio", xalign=0.5)
+            title_lbl = Gtk.Label(label="Fury Audio Studio", xalign=0.5)
             title_lbl.get_style_context().add_class("header-title")
 
             self.status_lbl = Gtk.Label(xalign=0.5)
@@ -1970,7 +1978,7 @@ def run_gtk_app(*, open_only: bool = False) -> None:
 
             # --- Footer ---
             footer_lbl = Gtk.Label(
-                label="Virtual Audio Device: Dusky Mic & Dusky Audio (PipeWire RT Low-Latency DSP)",
+                label="Virtual Audio Device: Fury Mic & Fury Audio (PipeWire RT Low-Latency DSP)",
                 xalign=0.5,
             )
             footer_lbl.get_style_context().add_class("footer-info")
@@ -2056,7 +2064,7 @@ def run_gtk_app(*, open_only: bool = False) -> None:
                     ok = stop_daemon(restore_defaults=True, cfg=current)
                     save_config(current)
             except Exception as exc:
-                print(f"[DuskyAudio] Engine state change failed: {exc}", file=sys.stderr)
+                print(f"[FuryAudio] Engine state change failed: {exc}", file=sys.stderr)
                 ok = False
             GLib.idle_add(self._engine_state_finished, active, ok)
 
@@ -3376,7 +3384,7 @@ def run_gtk_app(*, open_only: bool = False) -> None:
             self._queue_config_sync()
             self._refresh_all_ui()
             self._updating_ui = previous_updating
-            send_desktop_notification("Dusky Audio Studio", "All audio processing reset to clean factory defaults.")
+            send_desktop_notification("Fury Audio Studio", "All audio processing reset to clean factory defaults.")
 
         def reset_voice_fx(self, *_: Any) -> None:
             self.apply_preset_by_name("Natural Clean")
@@ -3606,35 +3614,35 @@ def main() -> None:
         case "--autostart":
             if cfg.enabled:
                 if start_daemon(cfg):
-                    print("Dusky Audio DSP autostarted from persisted state (ON).")
+                    print("Fury Audio DSP autostarted from persisted state (ON).")
                 else:
                     raise SystemExit(1)
             else:
-                print("Dusky Audio DSP persisted state is OFF (skipping autostart).")
+                print("Fury Audio DSP persisted state is OFF (skipping autostart).")
         case "--on" | "-1" | "on":
             if not start_daemon(cfg):
                 raise SystemExit(1)
-            send_desktop_notification("Dusky Audio Studio", "Voice DSP & Noise Cancellation turned ON.")
-            print("Dusky Audio DSP turned ON (PipeWire RT Low-Latency).")
+            send_desktop_notification("Fury Audio Studio", "Voice DSP & Noise Cancellation turned ON.")
+            print("Fury Audio DSP turned ON (PipeWire RT Low-Latency).")
         case "--off" | "-0" | "off":
             cfg.enabled = False
             save_config(cfg)
             stop_daemon(restore_defaults=True, cfg=cfg)
-            send_desktop_notification("Dusky Audio Studio", "Voice DSP turned OFF (Direct Hardware Bypass).")
-            print("Dusky Audio DSP turned OFF (Direct Hardware Bypass).")
+            send_desktop_notification("Fury Audio Studio", "Voice DSP turned OFF (Direct Hardware Bypass).")
+            print("Fury Audio DSP turned OFF (Direct Hardware Bypass).")
         case "--toggle" | "-t" | "toggle":
             is_on = bool(get_daemon_pid())
             if is_on:
                 cfg.enabled = False
                 save_config(cfg)
                 stop_daemon(restore_defaults=True, cfg=cfg)
-                send_desktop_notification("Dusky Audio Studio", "Voice DSP turned OFF (Direct Hardware Bypass).")
-                print("Dusky Audio DSP turned OFF.")
+                send_desktop_notification("Fury Audio Studio", "Voice DSP turned OFF (Direct Hardware Bypass).")
+                print("Fury Audio DSP turned OFF.")
             else:
                 if not start_daemon(cfg):
                     raise SystemExit(1)
-                send_desktop_notification("Dusky Audio Studio", "Voice DSP & Noise Cancellation turned ON.")
-                print("Dusky Audio DSP turned ON.")
+                send_desktop_notification("Fury Audio Studio", "Voice DSP & Noise Cancellation turned ON.")
+                print("Fury Audio DSP turned ON.")
         case "--reset" | "--reset-all" | "-r":
             cfg = AudioConfig(enabled=cfg.enabled, source=cfg.source, sink=cfg.sink,
                               pre_source=cfg.pre_source, pre_sink=cfg.pre_sink,
@@ -3826,7 +3834,7 @@ def main() -> None:
                 raise SystemExit(2)
         case "--help" | "-h":
             print(
-                """Usage: dusky_audio_studio.py [COMMAND]
+                """Usage: fury_audio_studio.py [COMMAND]
 
 Commands:
   --gui, -g                 Launch complete GTK3 Audio Studio window (default)

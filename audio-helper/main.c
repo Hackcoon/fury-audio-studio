@@ -1,4 +1,4 @@
-/* Dusky Audio Studio: PipeWire virtual microphone and playback sink with DSP.
+/* Fury Audio Studio: PipeWire virtual microphone and playback sink with DSP.
  *
  * IPC: line-based commands on stdin, fixed-size binary audio frames on stdout
  *      (see protocol.h). Telemetry rate ~60 Hz; audio runs at 48 kHz.
@@ -74,7 +74,7 @@ static struct
     _Atomic int vocoder_shift_semis; /* -24..+24 transpose applied when follow=1 */
 
     /* Master output gain applied at the virtual source stream (NOT the
-     * monitor) so apps recording from "Dusky Mic" hear it
+     * monitor) so apps recording from "Fury Mic" hear it
      * at the user-chosen level. Per-mille: 0=mute, 1000=unity, 2000=+6 dB.
      * Boosts above unity may exceed digital full scale. */
     _Atomic int master_vol_mille;
@@ -136,12 +136,12 @@ static struct
      * Hawking style. */
     _Atomic int voice_autotune_target_hz;
 
-    struct eq_band eq[GHA_EQ_BANDS];
+    struct eq_band eq[FURY_EQ_BANDS];
 
     /* Output Playback Stereo Parametric Equalizer */
     _Atomic int out_eq_on;
     _Atomic int out_eq_gain_centidb;
-    struct eq_band out_eq[GHA_EQ_BANDS];
+    struct eq_band out_eq[FURY_EQ_BANDS];
 
     /* Output Playback Stereo Voice FX & Modulation */
     _Atomic int out_vocoder_on;
@@ -236,7 +236,7 @@ static void params_init(void)
         int hz;
         int q;
         int g;
-    } defaults[GHA_EQ_BANDS] = {
+    } defaults[FURY_EQ_BANDS] = {
         {0, 80, 707, 0},      /* peak 80 Hz */
         {1, 120, 707, 300},   /* low-shelf +3 dB */
         {0, 250, 1000, 0},    /* peak idle (mud control) */
@@ -247,7 +247,7 @@ static void params_init(void)
         {2, 9000, 700, 200},  /* high-shelf +2 dB */
         {0, 12000, 1000, 0},  /* peak idle (air) */
     };
-    for (int i = 0; i < GHA_EQ_BANDS; i++)
+    for (int i = 0; i < FURY_EQ_BANDS; i++)
     {
         atomic_store(&g_params.eq[i].type, defaults[i].type);
         atomic_store(&g_params.eq[i].freq_hz, defaults[i].hz);
@@ -1091,8 +1091,8 @@ struct post_ring
 struct rt_state
 {
     DenoiseState *rn;
-    struct biquad eq[GHA_EQ_BANDS];
-    int eq_seq[GHA_EQ_BANDS]; /* last applied param hash */
+    struct biquad eq[FURY_EQ_BANDS];
+    int eq_seq[FURY_EQ_BANDS]; /* last applied param hash */
     struct delay_state delay;
     struct reverb_state reverb;
     int was_delay_on;
@@ -1213,7 +1213,7 @@ static int eq_hash(const struct eq_band *b)
 
 static void rt_refresh_eq(void)
 {
-    for (int i = 0; i < GHA_EQ_BANDS; i++)
+    for (int i = 0; i < FURY_EQ_BANDS; i++)
     {
         int h = eq_hash(&g_params.eq[i]);
         if (h != g_rt.eq_seq[i])
@@ -1230,13 +1230,13 @@ static void rt_refresh_eq(void)
     }
 }
 
-static struct biquad g_sink_eq_l[GHA_EQ_BANDS];
-static struct biquad g_sink_eq_r[GHA_EQ_BANDS];
-static int g_sink_eq_seq[GHA_EQ_BANDS];
+static struct biquad g_sink_eq_l[FURY_EQ_BANDS];
+static struct biquad g_sink_eq_r[FURY_EQ_BANDS];
+static int g_sink_eq_seq[FURY_EQ_BANDS];
 
 static void rt_refresh_sink_eq(void)
 {
-    for (int i = 0; i < GHA_EQ_BANDS; i++)
+    for (int i = 0; i < FURY_EQ_BANDS; i++)
     {
         int h = eq_hash(&g_params.out_eq[i]);
         if (h != g_sink_eq_seq[i])
@@ -1747,7 +1747,7 @@ static void cb_in_process(void *userdata)
 
         if (eq_on)
         {
-            for (int bi = 0; bi < GHA_EQ_BANDS; bi++)
+            for (int bi = 0; bi < FURY_EQ_BANDS; bi++)
                 y = biquad_tick(&g_rt.eq[bi], y);
             /* Post-EQ uniform gain (the "drag the line" parameter). Placed
              * inside the eq_on block so it shares the bypass switch with
@@ -1847,14 +1847,14 @@ static void cb_in_process(void *userdata)
             g_snap.rnn_diff_n[slot] = g_rt.rnn_diff_n;
             atomic_store(&g_snap.tracked_pitch_hz, g_rt.pitch.valid ? g_rt.pitch.tracked_hz : 0.0f);
             int out_rnn = atomic_load(&g_params.out_rnnoise_on);
-            uint32_t flags = (rnn_on ? GHA_FLAG_RNNOISE_ON : 0u) |
-                             (eq_on ? GHA_FLAG_EQ_ON : 0u) |
-                             (delay_on ? GHA_FLAG_DELAY_ON : 0u) |
-                             (reverb_on ? GHA_FLAG_REVERB_ON : 0u) |
-                             (mon_on ? GHA_FLAG_MONITOR_ON : 0u) |
-                             (voc_on ? GHA_FLAG_VOCODER_ON : 0u) |
-                             (out_rnn ? GHA_FLAG_OUT_RNNOISE_ON : 0u) |
-                             (atomic_load(&g_params.out_eq_on) ? GHA_FLAG_OUT_EQ_ON : 0u);
+            uint32_t flags = (rnn_on ? FURY_FLAG_RNNOISE_ON : 0u) |
+                             (eq_on ? FURY_FLAG_EQ_ON : 0u) |
+                             (delay_on ? FURY_FLAG_DELAY_ON : 0u) |
+                             (reverb_on ? FURY_FLAG_REVERB_ON : 0u) |
+                             (mon_on ? FURY_FLAG_MONITOR_ON : 0u) |
+                             (voc_on ? FURY_FLAG_VOCODER_ON : 0u) |
+                             (out_rnn ? FURY_FLAG_OUT_RNNOISE_ON : 0u) |
+                             (atomic_load(&g_params.out_eq_on) ? FURY_FLAG_OUT_EQ_ON : 0u);
             atomic_store(&g_snap.flags, flags);
             atomic_store(&g_snap.slot_state[slot], 1);
             atomic_store(&g_snap.published_slot, slot);
@@ -2058,7 +2058,7 @@ static float sink_channel_tick(struct sink_channel_state *ch, float x, int aggro
 }
 
 /* Sink capture RT callback. The virtual sink receives interleaved stereo
- * F32 from apps routed into "Dusky Audio".
+ * F32 from apps routed into "Fury Audio".
  * When out_rnnoise_on is active, each channel is independently denoised.
  * When bypassed, audio passes through untouched. */
 static void cb_sink_in_process(void *userdata)
@@ -2247,7 +2247,7 @@ static void cb_sink_in_process(void *userdata)
         /* 5. 9-Band Stereo Parametric EQ */
         if (out_eq_on)
         {
-            for (int bi = 0; bi < GHA_EQ_BANDS; bi++)
+            for (int bi = 0; bi < FURY_EQ_BANDS; bi++)
             {
                 l = biquad_tick(&g_sink_eq_l[bi], l);
                 r = biquad_tick(&g_sink_eq_r[bi], r);
@@ -2359,7 +2359,7 @@ static void cb_state_changed(void *userdata, enum pw_stream_state old,
                        : (ctx == &g_sink_in_ctx)  ? "sink-in "
                        : (ctx == &g_sink_out_ctx) ? "sink-out"
                                                   : "?       ";
-    fprintf(stderr, "[ghelper-audio] %s %s -> %s%s%s\n",
+    fprintf(stderr, "[fury-audio] %s %s -> %s%s%s\n",
             name,
             pw_stream_state_as_string(old),
             pw_stream_state_as_string(state),
@@ -2426,7 +2426,7 @@ static int create_capture_stream(struct app *app, const char *target)
         PW_KEY_MEDIA_TYPE, "Audio",
         PW_KEY_MEDIA_CATEGORY, "Capture",
         PW_KEY_MEDIA_ROLE, "Communication",
-        PW_KEY_NODE_NAME, "ghelper-audio-capture",
+        PW_KEY_NODE_NAME, "fury-audio-capture",
         PW_KEY_NODE_DESCRIPTION, "G-Helper Audio capture",
         PW_KEY_NODE_AUTOCONNECT, "true",
         PW_KEY_NODE_DONT_RECONNECT, has_target ? "true" : "false",
@@ -2437,7 +2437,7 @@ static int create_capture_stream(struct app *app, const char *target)
 
     app->in_stream = pw_stream_new_simple(
         pw_main_loop_get_loop(app->loop),
-        "ghelper-audio-capture",
+        "fury-audio-capture",
         props,
         &in_stream_events,
         &g_in_ctx);
@@ -2479,11 +2479,11 @@ static void apply_pending_source(struct app *app)
     g_in_ctx.stream = NULL;
 
     if (create_capture_stream(app, target) < 0)
-        fprintf(stderr, "[ghelper-audio] reconnect to '%s' failed\n", target);
+        fprintf(stderr, "[fury-audio] reconnect to '%s' failed\n", target);
     else
     {
         snprintf(app->current_source, sizeof(app->current_source), "%s", target);
-        fprintf(stderr, "[ghelper-audio] capture target set to '%s'\n",
+        fprintf(stderr, "[fury-audio] capture target set to '%s'\n",
                 target[0] ? target : "default");
     }
 }
@@ -2499,11 +2499,11 @@ static int create_monitor_stream(struct app *app, const char *target)
         PW_KEY_MEDIA_TYPE, "Audio",
         PW_KEY_MEDIA_CATEGORY, "Playback",
         PW_KEY_MEDIA_ROLE, "Communication",
-        PW_KEY_NODE_NAME, "ghelper-audio-monitor",
-        PW_KEY_NODE_DESCRIPTION, "Dusky Audio monitor",
+        PW_KEY_NODE_NAME, "fury-audio-monitor",
+        PW_KEY_NODE_DESCRIPTION, "Fury Audio monitor",
         PW_KEY_NODE_AUTOCONNECT, "true",
         PW_KEY_NODE_DONT_RECONNECT, has_target ? "true" : "false",
-        "node.link-group", "ghelper-sink-group",
+        "node.link-group", "fury-sink-group",
         NULL);
 
     if (has_target)
@@ -2511,7 +2511,7 @@ static int create_monitor_stream(struct app *app, const char *target)
 
     app->mon_stream = pw_stream_new_simple(
         pw_main_loop_get_loop(app->loop),
-        "ghelper-audio-monitor",
+        "fury-audio-monitor",
         props,
         &mon_stream_events,
         &g_mon_ctx);
@@ -2552,7 +2552,7 @@ static void apply_pending_monitor(struct app *app)
             app->mon_stream = NULL;
             g_mon_ctx.stream = NULL;
         }
-        fprintf(stderr, "[ghelper-audio] monitor disconnected\n");
+        fprintf(stderr, "[fury-audio] monitor disconnected\n");
         return;
     }
 
@@ -2567,9 +2567,9 @@ static void apply_pending_monitor(struct app *app)
 
         const char *target = app->sink_pending_target;
         if (create_monitor_stream(app, target) < 0)
-            fprintf(stderr, "[ghelper-audio] monitor connect failed\n");
+            fprintf(stderr, "[fury-audio] monitor connect failed\n");
         else
-            fprintf(stderr, "[ghelper-audio] monitor connected targeting '%s'\n",
+            fprintf(stderr, "[fury-audio] monitor connected targeting '%s'\n",
                     target[0] ? target : "default");
     }
 }
@@ -2588,13 +2588,13 @@ static int create_sink_out_stream(struct app *app, const char *target)
         PW_KEY_MEDIA_TYPE, "Audio",
         PW_KEY_MEDIA_CATEGORY, "Playback",
         PW_KEY_MEDIA_ROLE, "Communication",
-        PW_KEY_NODE_NAME, "ghelper-audio-sink-out",
-        PW_KEY_NODE_DESCRIPTION, "Dusky Audio playback",
+        PW_KEY_NODE_NAME, "fury-audio-sink-out",
+        PW_KEY_NODE_DESCRIPTION, "Fury Audio playback",
         PW_KEY_NODE_AUTOCONNECT, "true",
         PW_KEY_NODE_DONT_RECONNECT, has_target ? "true" : "false",
         /* Must share link-group with sink_in so WirePlumber routes
          * to real hardware, not back into our own virtual sink. */
-        "node.link-group", "ghelper-sink-group",
+        "node.link-group", "fury-sink-group",
         NULL);
 
     if (has_target)
@@ -2602,7 +2602,7 @@ static int create_sink_out_stream(struct app *app, const char *target)
 
     app->sink_out_stream = pw_stream_new_simple(
         pw_main_loop_get_loop(app->loop),
-        "ghelper-audio-sink-out",
+        "fury-audio-sink-out",
         props,
         &sink_out_stream_events,
         &g_sink_out_ctx);
@@ -2643,11 +2643,11 @@ static void apply_pending_sink_target(struct app *app)
     g_sink_out_ctx.stream = NULL;
 
     if (create_sink_out_stream(app, target) < 0)
-        fprintf(stderr, "[ghelper-audio] sink-out reconnect to '%s' failed\n", target);
+        fprintf(stderr, "[fury-audio] sink-out reconnect to '%s' failed\n", target);
     else
     {
         snprintf(app->current_sink, sizeof(app->current_sink), "%s", target);
-        fprintf(stderr, "[ghelper-audio] sink-out target set to '%s'\n",
+        fprintf(stderr, "[fury-audio] sink-out target set to '%s'\n",
                 target[0] ? target : "default");
     }
 
@@ -2680,10 +2680,10 @@ static void on_timer(void *userdata, uint64_t expirations)
         return;
     last_seq = seq;
 
-    struct gha_frame f;
+    struct fury_frame f;
     memset(&f, 0, sizeof(f));
-    f.magic = GHA_MAGIC;
-    f.version = GHA_PROTOCOL_VERSION;
+    f.magic = FURY_MAGIC;
+    f.version = FURY_PROTOCOL_VERSION;
     f.seq = app->seq_emit++;
     f.flags = atomic_load(&g_snap.flags);
     f.vad_prob = atomic_load(&g_snap.vad_prob);
@@ -2748,7 +2748,7 @@ static void parse_cmd(char *line)
          * When disabled, audio passes through the sink untouched. */
         int on = atoi(line + 10) ? 1 : 0;
         atomic_store(&g_params.out_rnnoise_on, on);
-        fprintf(stderr, "[ghelper-audio] output noise cancellation %s\n",
+        fprintf(stderr, "[fury-audio] output noise cancellation %s\n",
                 on ? "ON" : "OFF");
     }
     else if (!strncmp(line, "OUT_AGG ", 8))
@@ -2771,7 +2771,7 @@ static void parse_cmd(char *line)
         snprintf(g_app.sink_pending_target, sizeof(g_app.sink_pending_target),
                  "%s", val);
         atomic_store(&g_app.sink_tgt_pending, 1);
-        fprintf(stderr, "[ghelper-audio] sink target pending: '%s'\n", val);
+        fprintf(stderr, "[fury-audio] sink target pending: '%s'\n", val);
     }
     else if (!strncmp(line, "EQ ", 3))
     {
@@ -2791,7 +2791,7 @@ static void parse_cmd(char *line)
     else if (!strncmp(line, "OUT_EQB ", 8))
     {
         int idx, type, hz, q, g;
-        if (sscanf(line + 8, "%d %d %d %d %d", &idx, &type, &hz, &q, &g) == 5 && idx >= 0 && idx < GHA_EQ_BANDS)
+        if (sscanf(line + 8, "%d %d %d %d %d", &idx, &type, &hz, &q, &g) == 5 && idx >= 0 && idx < FURY_EQ_BANDS)
         {
             if (type < 0) type = 0;
             if (type > 6) type = 6;
@@ -3020,7 +3020,7 @@ static void parse_cmd(char *line)
     else if (!strncmp(line, "EQB ", 4))
     {
         int idx, type, hz, q, g;
-        if (sscanf(line + 4, "%d %d %d %d %d", &idx, &type, &hz, &q, &g) == 5 && idx >= 0 && idx < GHA_EQ_BANDS)
+        if (sscanf(line + 4, "%d %d %d %d %d", &idx, &type, &hz, &q, &g) == 5 && idx >= 0 && idx < FURY_EQ_BANDS)
         {
             /* Clamp to the ranges biquad_design is numerically well-behaved
              * in: freq at/below ~10 Hz or at/above Nyquist yields degenerate
@@ -3222,7 +3222,7 @@ static void parse_cmd(char *line)
     }
     else if (!strncmp(line, "QUIT", 4))
     {
-        fprintf(stderr, "[ghelper-audio] received QUIT\n");
+        fprintf(stderr, "[fury-audio] received QUIT\n");
         /* main loop quit happens in signal/eof path */
         kill(getpid(), SIGTERM);
     }
@@ -3250,7 +3250,7 @@ static void on_stdin(void *userdata, int fd, uint32_t mask)
     {
         stdin_len = 0;
         stdin_buf[0] = '\0';
-        fprintf(stderr, "[ghelper-audio] discarded oversized stdin line\n");
+        fprintf(stderr, "[fury-audio] discarded oversized stdin line\n");
         return;
     }
 
@@ -3291,7 +3291,7 @@ int main(int argc, char *argv[])
 {
     if (argc == 2 && strcmp(argv[1], "--protocol-version") == 0)
     {
-        printf("%u\n", GHA_PROTOCOL_VERSION);
+        printf("%u\n", FURY_PROTOCOL_VERSION);
         return 0;
     }
     pw_init(&argc, &argv);
@@ -3304,7 +3304,7 @@ int main(int argc, char *argv[])
         return 1;
     }
     /* Pre-design EQ defaults */
-    for (int i = 0; i < GHA_EQ_BANDS; i++)
+    for (int i = 0; i < FURY_EQ_BANDS; i++)
         g_rt.eq_seq[i] = -1;
     rt_refresh_eq();
     /* Pre-RNNoise rumble filter: 70 Hz high-pass with Butterworth Q. Q
@@ -3358,7 +3358,7 @@ int main(int argc, char *argv[])
     g_sink_ch_r.hangover_left = 0;
 
     /* ---- Output Playback DSP RT State Initialization ---- */
-    for (int i = 0; i < GHA_EQ_BANDS; i++)
+    for (int i = 0; i < FURY_EQ_BANDS; i++)
         g_sink_eq_seq[i] = -1;
     rt_refresh_sink_eq();
 
@@ -3406,9 +3406,9 @@ int main(int argc, char *argv[])
         PW_KEY_MEDIA_TYPE, "Audio",
         PW_KEY_MEDIA_CATEGORY, "Playback",
         PW_KEY_MEDIA_ROLE, "Communication",
-        PW_KEY_NODE_NAME, "ghelper-audio",
-        PW_KEY_NODE_NICK, "Dusky Mic",
-        PW_KEY_NODE_DESCRIPTION, "Dusky Mic",
+        PW_KEY_NODE_NAME, "fury-audio",
+        PW_KEY_NODE_NICK, "Fury Mic",
+        PW_KEY_NODE_DESCRIPTION, "Fury Mic",
         PW_KEY_MEDIA_CLASS, "Audio/Source",
         PW_KEY_NODE_VIRTUAL, "true",
         "audio.channels", "1",
@@ -3418,7 +3418,7 @@ int main(int argc, char *argv[])
 
     app->out_stream = pw_stream_new_simple(
         pw_main_loop_get_loop(app->loop),
-        "ghelper-audio",
+        "fury-audio",
         out_props,
         &out_stream_events,
         &g_out_ctx);
@@ -3467,9 +3467,9 @@ int main(int argc, char *argv[])
         PW_KEY_MEDIA_TYPE, "Audio",
         PW_KEY_MEDIA_CATEGORY, "Capture",
         PW_KEY_MEDIA_ROLE, "Communication",
-        PW_KEY_NODE_NAME, "ghelper-audio-sink",
-        PW_KEY_NODE_NICK, "Dusky Audio",
-        PW_KEY_NODE_DESCRIPTION, "Dusky Audio",
+        PW_KEY_NODE_NAME, "fury-audio-sink",
+        PW_KEY_NODE_NICK, "Fury Audio",
+        PW_KEY_NODE_DESCRIPTION, "Fury Audio",
         PW_KEY_MEDIA_CLASS, "Audio/Sink",
         PW_KEY_NODE_VIRTUAL, "true",
         "audio.channels", "2",
@@ -3479,12 +3479,12 @@ int main(int argc, char *argv[])
          * partner (sink_out_stream) form a pair: WP must not route the
          * playback stream back into this sink (feedback loop). This is
          * the standard PipeWire pattern for virtual sink + loopback. */
-        "node.link-group", "ghelper-sink-group",
+        "node.link-group", "fury-sink-group",
         NULL);
 
     app->sink_in_stream = pw_stream_new_simple(
         pw_main_loop_get_loop(app->loop),
-        "ghelper-audio-sink",
+        "fury-audio-sink",
         sink_in_props,
         &sink_in_stream_events,
         &g_sink_in_ctx);
@@ -3548,8 +3548,8 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    fprintf(stderr, "[ghelper-audio] ready (proto v%u, fs=%d Hz, frame=%d)\n",
-            GHA_PROTOCOL_VERSION, SAMPLE_RATE, RNN_FRAME);
+    fprintf(stderr, "[fury-audio] ready (proto v%u, fs=%d Hz, frame=%d)\n",
+            FURY_PROTOCOL_VERSION, SAMPLE_RATE, RNN_FRAME);
 
     pw_main_loop_run(app->loop);
 
