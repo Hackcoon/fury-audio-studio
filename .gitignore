@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+fury_audio_dsp
+dusky_audio_dsp
